@@ -35,6 +35,7 @@ on:
 
 permissions:
   contents: read
+  actions: read # download the k0s-linux-amd64 artifact of the latest green k0s main build
   id-token: write # azure/login via OIDC
 
 jobs:
@@ -43,7 +44,6 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
-      build-k0s: ${{ steps.plan.outputs.build-k0s }}
       suite: ${{ steps.plan.outputs.suite }}
       version: ${{ steps.plan.outputs.version }}
       suite-sha: ${{ steps.plan.outputs.suite-sha }}
@@ -68,13 +68,10 @@ jobs:
             all) matrix='["k0s","k0rdent"]' ;;
             *) matrix="[\"$PRODUCT\"]" ;;
           esac
-          build_k0s=false
-          if [ "$VERSION" = main ] && [ "$PRODUCT" != k0rdent ]; then build_k0s=true; fi
           # shellcheck disable=SC1091
           . ./versions.env
           {
             echo "matrix=$matrix"
-            echo "build-k0s=$build_k0s"
             echo "suite=$SUITE"
             echo "version=$VERSION"
             echo "suite-sha=${SUITE_SHA_INPUT:-$SUITE_SHA}"
@@ -83,21 +80,9 @@ jobs:
           } >>"$GITHUB_OUTPUT"
           cat "$GITHUB_OUTPUT"
 
-  build-k0s:
-    name: Build k0s from main
-    needs: plan
-    if: needs.plan.outputs.build-k0s == 'true'
-    uses: k0sproject/k0s/.github/workflows/build-k0s.yml@main
-    with:
-      target-os: linux
-      target-arch: amd64
-
   run:
     name: "${{ matrix.product }} :: ${{ needs.plan.outputs.suite }} :: ${{ needs.plan.outputs.version }}"
-    needs: [plan, build-k0s]
-    if: >-
-      always() && needs.plan.result == 'success' &&
-      (needs.build-k0s.result == 'success' || needs.build-k0s.result == 'skipped')
+    needs: plan
     runs-on: ubuntu-24.04
     timeout-minutes: ${{ fromJSON(needs.plan.outputs.timeout) }}
     strategy:
@@ -113,19 +98,6 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
-
-      - name: Download k0s built from main
-        if: matrix.product == 'k0s' && needs.plan.outputs.build-k0s == 'true'
-        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
-        with:
-          name: k0s-linux-amd64
-          path: .cache
-
-      - name: Use the downloaded binary
-        if: matrix.product == 'k0s' && needs.plan.outputs.build-k0s == 'true'
-        run: |
-          chmod +x .cache/k0s
-          echo "K0S_BINARY=$PWD/.cache/k0s" >>"$GITHUB_ENV"
 
       - name: Azure login
         uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
@@ -145,6 +117,9 @@ jobs:
 
       - name: Run
         env:
+          # For version=main the k0s provisioner downloads k0s-linux-amd64 from the
+          # latest green k0sproject/k0s main build with gh.
+          GH_TOKEN: ${{ github.token }}
           PRODUCT: ${{ matrix.product }}
           SUITE: ${{ needs.plan.outputs.suite }}
           VERSION: ${{ needs.plan.outputs.version }}
