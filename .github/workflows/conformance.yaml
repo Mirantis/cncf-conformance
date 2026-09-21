@@ -1,0 +1,182 @@
+# SPDX-FileCopyrightText: 2026 Mirantis, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+# CNCF conformance runs. See README.md in this directory.
+
+name: Conformance
+
+on:
+  workflow_dispatch:
+    inputs:
+      product:
+        type: choice
+        description: Product to test.
+        options: [k0s, k0rdent, all]
+        default: k0s
+      suite:
+        type: choice
+        description: CNCF suite to run.
+        options: [ai, k8s]
+        default: ai
+      version:
+        type: string
+        description: "main (build from main), stable, or a release tag."
+        default: main
+      suite-sha:
+        type: string
+        description: Override SUITE_SHA from versions.env (ai suite only).
+        default: ""
+      keep-cluster:
+        type: boolean
+        description: Keep the cluster after the run (for debugging).
+        default: false
+  schedule:
+    - cron: 30 3 * * 1 # every Monday; runs suite=ai on main
+
+permissions:
+  contents: read
+  id-token: write # azure/login via OIDC
+
+jobs:
+  plan:
+    name: Plan
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      build-k0s: ${{ steps.plan.outputs.build-k0s }}
+      suite: ${{ steps.plan.outputs.suite }}
+      version: ${{ steps.plan.outputs.version }}
+      suite-sha: ${{ steps.plan.outputs.suite-sha }}
+      keep-cluster: ${{ steps.plan.outputs.keep-cluster }}
+      timeout: ${{ steps.plan.outputs.timeout }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - id: plan
+        env:
+          # Scheduled runs have no inputs; these are the cron defaults.
+          # TODO(k0rdent): switch the cron product to "all" once provision/k0rdent lands.
+          PRODUCT: ${{ inputs.product || 'k0s' }}
+          SUITE: ${{ inputs.suite || 'ai' }}
+          VERSION: ${{ inputs.version || 'main' }}
+          SUITE_SHA_INPUT: ${{ inputs.suite-sha }}
+          KEEP: ${{ inputs.keep-cluster && 'y' || 'n' }}
+        run: |
+          case "$PRODUCT" in
+            all) matrix='["k0s","k0rdent"]' ;;
+            *) matrix="[\"$PRODUCT\"]" ;;
+          esac
+          build_k0s=false
+          if [ "$VERSION" = main ] && [ "$PRODUCT" != k0rdent ]; then build_k0s=true; fi
+          # shellcheck disable=SC1091
+          . ./versions.env
+          {
+            echo "matrix=$matrix"
+            echo "build-k0s=$build_k0s"
+            echo "suite=$SUITE"
+            echo "version=$VERSION"
+            echo "suite-sha=${SUITE_SHA_INPUT:-$SUITE_SHA}"
+            echo "keep-cluster=$KEEP"
+            echo "timeout=$([ "$SUITE" = k8s ] && echo 180 || echo 60)"
+          } >>"$GITHUB_OUTPUT"
+          cat "$GITHUB_OUTPUT"
+
+  build-k0s:
+    name: Build k0s from main
+    needs: plan
+    if: needs.plan.outputs.build-k0s == 'true'
+    uses: k0sproject/k0s/.github/workflows/build-k0s.yml@main
+    with:
+      target-os: linux
+      target-arch: amd64
+
+  run:
+    name: "${{ matrix.product }} :: ${{ needs.plan.outputs.suite }} :: ${{ needs.plan.outputs.version }}"
+    needs: [plan, build-k0s]
+    if: >-
+      always() && needs.plan.result == 'success' &&
+      (needs.build-k0s.result == 'success' || needs.build-k0s.result == 'skipped')
+    runs-on: ubuntu-24.04
+    timeout-minutes: ${{ fromJSON(needs.plan.outputs.timeout) }}
+    strategy:
+      fail-fast: false
+      matrix:
+        product: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    env:
+      RUN_ID: gha-${{ github.run_id }}-${{ matrix.product }}
+      ARTIFACTS: ${{ github.workspace }}/artifacts
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Download k0s built from main
+        if: matrix.product == 'k0s' && needs.plan.outputs.build-k0s == 'true'
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
+        with:
+          name: k0s-linux-amd64
+          path: .cache
+
+      - name: Use the downloaded binary
+        if: matrix.product == 'k0s' && needs.plan.outputs.build-k0s == 'true'
+        run: |
+          chmod +x .cache/k0s
+          echo "K0S_BINARY=$PWD/.cache/k0s" >>"$GITHUB_ENV"
+
+      - name: Azure login
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Set up Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version: "1.25"
+          cache: false
+
+      - name: Install product tools
+        run: provision/${{ matrix.product }}/provision.sh deps
+
+      - name: Run
+        env:
+          PRODUCT: ${{ matrix.product }}
+          SUITE: ${{ needs.plan.outputs.suite }}
+          VERSION: ${{ needs.plan.outputs.version }}
+          SUITE_SHA: ${{ needs.plan.outputs.suite-sha }}
+          KEEP_CLUSTER: ${{ needs.plan.outputs.keep-cluster }}
+        run: |
+          keep=''
+          [ "$KEEP_CLUSTER" != y ] || keep=--keep-cluster
+          # shellcheck disable=SC2086
+          ./run.sh --product "$PRODUCT" --suite "$SUITE" --version "$VERSION" \
+            --suite-sha "$SUITE_SHA" --run-id "$RUN_ID" --out "$ARTIFACTS" $keep 2>&1 | tee run.log
+          rc="${PIPESTATUS[0]}"
+          {
+            echo '```'
+            tail -n 8 run.log
+            echo '```'
+          } >>"$GITHUB_STEP_SUMMARY"
+          exit "$rc"
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        with:
+          name: ${{ matrix.product }}-${{ needs.plan.outputs.suite }}-${{ github.run_id }}
+          path: |
+            ${{ env.ARTIFACTS }}
+            !${{ env.ARTIFACTS }}/**/kubeconfig
+            !${{ env.ARTIFACTS }}/**/ssh/**
+          if-no-files-found: warn
+          retention-days: 90
+
+      - name: Destroy leftovers
+        # Safety net in case the runner killed run.sh before its own cleanup.
+        if: always() && needs.plan.outputs.keep-cluster != 'y'
+        run: provision/${{ matrix.product }}/provision.sh down --run-id "$RUN_ID"
