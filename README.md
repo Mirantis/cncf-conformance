@@ -5,7 +5,7 @@ Automation and evidence for CNCF conformance certification of [k0s](https://k0sp
 - **Kubernetes AI Conformance** ([cncf/k8s-ai-conformance](https://github.com/cncf/k8s-ai-conformance)), tested with the [kubernetes-sigs/ai-conformance](https://github.com/kubernetes-sigs/ai-conformance) suite on a GPU cluster.
 - **Kubernetes Conformance** ([cncf/k8s-conformance](https://github.com/cncf/k8s-conformance)), tested with Sonobuoy. k0rdent only; k0s runs its own.
 
-A pipeline run provisions a temporary cluster on Azure, runs one suite, collects the submission artifacts, and destroys the cluster. Runs are weekly and on demand through GitHub Actions. Submissions to CNCF are prepared from a green run and opened manually.
+A pipeline run provisions a temporary cluster on Azure, runs one suite, collects the submission artifacts, and destroys the cluster. Runs are weekly and on demand through GitHub Actions. Submissions to CNCF are prepared from a green run and opened manually. For a given Kubernetes version, the Kubernetes conformance entry must be merged before the AI conformance submission can reference it.
 
 ## Layout
 
@@ -29,7 +29,7 @@ Each directory has a README describing its contract.
 |---|---|---|---|---|
 | k0s | AI Conformance | [certified](https://github.com/cncf/k8s-ai-conformance/tree/main/v1.35/k0s) (manual) | planned | planned |
 | k0rdent | AI Conformance | [certified](https://github.com/cncf/k8s-ai-conformance/tree/main/v1.35/k0rdent) (manual) | planned | planned |
-| k0rdent | Kubernetes Conformance | [certified](https://github.com/cncf/k8s-conformance/tree/master/v1.35/k0rdent) (manual) | | planned |
+| k0rdent | Kubernetes Conformance | [certified](https://github.com/cncf/k8s-conformance/tree/master/v1.35/k0rdent) (manual) | planned | planned |
 
 ## License
 
