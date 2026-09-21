@@ -1,0 +1,36 @@
+# cncf-conformance
+
+Automation and evidence for CNCF conformance certification of [k0s](https://k0sproject.io) and [k0rdent](https://k0rdent.io):
+
+- **Kubernetes AI Conformance** ([cncf/k8s-ai-conformance](https://github.com/cncf/k8s-ai-conformance)), tested with the [kubernetes-sigs/ai-conformance](https://github.com/kubernetes-sigs/ai-conformance) suite on a GPU cluster.
+- **Kubernetes Conformance** ([cncf/k8s-conformance](https://github.com/cncf/k8s-conformance)), tested with Sonobuoy. k0rdent only; k0s runs its own.
+
+A pipeline run provisions a temporary cluster on Azure, runs one suite, collects the submission artifacts, and destroys the cluster. Runs are weekly and on demand through GitHub Actions. Submissions to CNCF are prepared from a green run and opened manually.
+
+## Layout
+
+Read the top level as the pipeline: provision a cluster, run a suite, keep what was submitted.
+
+| Path | Purpose |
+|---|---|
+| `run.sh` | Only entrypoint: `run.sh --product k0s\|k0rdent --suite ai\|k8s` |
+| `versions.env` | Every pinned version (suite commit, GPU Operator, Kueue, k0sctl, Sonobuoy, ...) |
+| `lib/` | Shell helpers shared by all stages |
+| `provision/<product>/` | Product-specific: `deps`, `up`, `down`. `up` hands over a `cluster.env` |
+| `suite/<program>/` | Product-agnostic: reads `cluster.env`, produces `submission/` and `debug/` |
+| `submissions/<upstream repo>/v1.xx/<product>/` | Exact copy of what was submitted upstream, in the upstream's own layout |
+| `.github/workflows/` | One workflow, matrix over products |
+
+Each directory has a README describing its contract.
+
+## Status
+
+| Product | Program | v1.35 | v1.36 | v1.37 |
+|---|---|---|---|---|
+| k0s | AI Conformance | [certified](https://github.com/cncf/k8s-ai-conformance/tree/main/v1.35/k0s) (manual) | planned | planned |
+| k0rdent | AI Conformance | [certified](https://github.com/cncf/k8s-ai-conformance/tree/main/v1.35/k0rdent) (manual) | planned | planned |
+| k0rdent | Kubernetes Conformance | [certified](https://github.com/cncf/k8s-conformance/tree/master/v1.35/k0rdent) (manual) | | planned |
+
+## License
+
+Apache-2.0, see [LICENSE](LICENSE). Maintained by Mirantis.
