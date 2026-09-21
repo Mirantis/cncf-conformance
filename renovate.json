@@ -1,0 +1,16 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", "helpers:pinGitHubActionDigests"],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/^versions\\.env$/"],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: registryUrl=(?<registryUrl>\\S+))?\\n[A-Z_]+=v?(?<currentValue>\\S+)"
+      ]
+    }
+  ],
+  "packageRules": [
+    { "matchPackageNames": ["k0sproject/k0sctl"], "enabled": false, "description": "Pinned until k0sproject/k0sctl#1187 is released" }
+  ]
+}
