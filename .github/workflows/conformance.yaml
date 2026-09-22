@@ -48,7 +48,7 @@ jobs:
       version: ${{ steps.plan.outputs.version }}
       suite-sha: ${{ steps.plan.outputs.suite-sha }}
       keep-cluster: ${{ steps.plan.outputs.keep-cluster }}
-      timeout: ${{ steps.plan.outputs.timeout }}
+      timeouts: ${{ steps.plan.outputs.timeouts }}
       attempts: ${{ steps.plan.outputs.attempts }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -58,8 +58,7 @@ jobs:
       - id: plan
         env:
           # Scheduled runs have no inputs; these are the cron defaults.
-          # TODO(k0rdent): switch the cron product to "all" once provision/k0rdent lands.
-          PRODUCT: ${{ inputs.product || 'k0s' }}
+          PRODUCT: ${{ inputs.product || 'all' }}
           SUITE: ${{ inputs.suite || 'ai' }}
           VERSION: ${{ inputs.version || 'main' }}
           SUITE_SHA_INPUT: ${{ inputs.suite-sha }}
@@ -80,9 +79,11 @@ jobs:
             # Scheduled runs retry once so a transient infrastructure failure does not
             # page anyone; dispatched runs do not, because their artifacts may be submitted.
             attempts=$([ "$GITHUB_EVENT_NAME" = schedule ] && echo 2 || echo 1)
-            per_attempt=$([ "$SUITE" = k8s ] && echo 180 || echo 60)
+            # Minutes per attempt and product. k0s ai ≈ 15 min, k0rdent ai ≈ 36 min
+            # (kind + kcm 5, ClusterDeployment 10, GPU Operator 7, suite 3, teardown 8).
+            if [ "$SUITE" = k8s ]; then k0s=180; k0rdent=180; else k0s=60; k0rdent=75; fi
             echo "attempts=$attempts"
-            echo "timeout=$((per_attempt * attempts))"
+            echo "timeouts={\"k0s\":$((k0s * attempts)),\"k0rdent\":$((k0rdent * attempts))}"
           } >>"$GITHUB_OUTPUT"
           cat "$GITHUB_OUTPUT"
 
@@ -90,7 +91,7 @@ jobs:
     name: "${{ matrix.product }} :: ${{ needs.plan.outputs.suite }} :: ${{ needs.plan.outputs.version }}"
     needs: plan
     runs-on: ubuntu-24.04
-    timeout-minutes: ${{ fromJSON(needs.plan.outputs.timeout) }}
+    timeout-minutes: ${{ fromJSON(needs.plan.outputs.timeouts)[matrix.product] }}
     strategy:
       fail-fast: false
       matrix:
@@ -126,6 +127,13 @@ jobs:
           # For version=main the k0s provisioner downloads k0s-linux-amd64 from the
           # latest green k0sproject/k0s main build with gh.
           GH_TOKEN: ${{ github.token }}
+          # The k0rdent provisioner runs the Azure CAPI provider inside a kind cluster,
+          # which authenticates with the service principal itself; the OIDC login above
+          # only covers the az CLI.
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
           PRODUCT: ${{ matrix.product }}
           SUITE: ${{ needs.plan.outputs.suite }}
           VERSION: ${{ needs.plan.outputs.version }}

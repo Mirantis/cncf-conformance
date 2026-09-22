@@ -1,0 +1,18 @@
+# SPDX-FileCopyrightText: 2026 Mirantis, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+# Management object with only the providers an Azure child cluster needs. The chart
+# default enables every provider (AWS, GCP, OpenStack, vSphere, KubeVirt, ...), which
+# is more than a kind cluster on a CI runner or a laptop can carry.
+# https://docs.k0rdent.io/latest/appendix/appendix-extend-mgmt/
+apiVersion: k0rdent.mirantis.com/v1beta1
+kind: Management
+metadata:
+  name: kcm
+spec:
+  release: ${RELEASE}
+  # core is left out: it defaults from the Release, and kcm main rejects an empty kcm block.
+  providers:
+    - name: cluster-api-provider-k0sproject-k0smotron
+    - name: cluster-api-provider-azure
+    - name: projectsveltos

@@ -28,7 +28,7 @@ Each directory has a README describing its contract.
 | Product | Program | v1.35 | v1.36 | v1.37 |
 |---|---|---|---|---|
 | k0s | AI Conformance | [certified](https://github.com/cncf/k8s-ai-conformance/tree/main/v1.35/k0s) (manual) | planned | planned |
-| k0rdent | AI Conformance | [certified](https://github.com/cncf/k8s-ai-conformance/tree/main/v1.35/k0rdent) (manual) | planned | planned |
+| k0rdent | AI Conformance | [certified](https://github.com/cncf/k8s-ai-conformance/tree/main/v1.35/k0rdent) (manual) | pipeline green, submission pending | planned |
 | k0rdent | Kubernetes Conformance | [certified](https://github.com/cncf/k8s-conformance/tree/master/v1.35/k0rdent) (manual) | planned | planned |
 
 ## License

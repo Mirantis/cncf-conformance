@@ -370,7 +370,7 @@ cmd_up() {
   WORK=$(mktemp -d)
   export KUBECONFIG="$OUT/kubeconfig"
   mkdir -p "$OUT/debug" "$SSH_DIR" "$HOME/.ssh"
-  trap 'rm -rf "$WORK"' EXIT
+  trap 'stage_abort $?; rm -rf "$WORK"' EXIT
 
   stage k0s-resolve-version resolve_version
   stage k0s-network provision_network
