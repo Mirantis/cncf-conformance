@@ -69,6 +69,15 @@ collect_suite_state() {
   $k -n gpu-operator get pods -o wide >"$dir/gpu-operator-pods.txt" 2>&1 || true
   $k get clusterqueue,localqueue,resourceflavor -A >"$dir/kueue-objects.txt" 2>&1 || true
   $k -n "$GANG_NAMESPACE" get jobs,pods -o wide >"$dir/gang-namespace.txt" 2>&1 || true
+  # Driver, toolkit, device plugin and validator logs: the only way to explain a
+  # GPU that never became (or stopped being) allocatable once the VMs are gone.
+  local pod
+  mkdir -p "$dir/gpu-operator-logs"
+  for pod in $($k -n gpu-operator get pods -o name 2>/dev/null | grep -E 'driver|toolkit|device-plugin|validator|gpu-operator-[a-z0-9]+-' ); do
+    $k -n gpu-operator describe "$pod" >"$dir/gpu-operator-logs/${pod#pod/}.describe.txt" 2>&1 || true
+    $k -n gpu-operator logs "$pod" --all-containers --tail=500 >"$dir/gpu-operator-logs/${pod#pod/}.log" 2>&1 || true
+    $k -n gpu-operator logs "$pod" --all-containers --previous --tail=200 >"$dir/gpu-operator-logs/${pod#pod/}.previous.log" 2>/dev/null || rm -f "$dir/gpu-operator-logs/${pod#pod/}.previous.log"
+  done
 }
 
 on_exit() {
@@ -85,10 +94,30 @@ gpu_capacity_is_one() {
   [ "$(kubectl get node "$GPU_NODE" -o jsonpath='{.status.allocatable.nvidia\.com/gpu}' 2>/dev/null)" = 1 ]
 }
 
+# The validator pod only becomes Ready once driver, toolkit, device plugin and a
+# CUDA workload have all been checked on the node.
+gpu_validator_ready() {
+  kubectl -n gpu-operator get pods -l app=nvidia-operator-validator \
+    -o jsonpath='{range .items[*]}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}' 2>/dev/null | grep -q True
+}
+
+# gpu_stable [validator] — allocatable can flap while the driver pod restarts;
+# require it to hold for 30 s. With "validator", also require the operator's
+# validator pod to stay Ready (only meaningful when this suite installed the operator).
+gpu_stable() {
+  local i
+  for i in 1 2 3; do
+    gpu_capacity_is_one || return 1
+    [ "${1:-}" != validator ] || gpu_validator_ready || return 1
+    [ "$i" -eq 3 ] || sleep 15
+  done
+}
+
 ensure_gpu() {
   if gpu_capacity_is_one; then
     GPU_OPERATOR_STATE=preexisting
     log "nvidia.com/gpu already allocatable on $GPU_NODE; skipping GPU Operator install"
+    gpu_stable || die "nvidia.com/gpu on $GPU_NODE is allocatable but not stable"
     return 0
   fi
   GPU_OPERATOR_STATE=installed
@@ -99,6 +128,8 @@ ensure_gpu() {
     --version "$GPU_OPERATOR_VERSION" -f "$HERE/manifests/gpu-operator-values.yaml" -o json |
     jq -r '"gpu-operator " + .info.status'
   wait_for "$GPU_READY_TIMEOUT" gpu_capacity_is_one
+  wait_for 300 gpu_validator_ready
+  gpu_stable validator || die "nvidia.com/gpu on $GPU_NODE did not stay allocatable for 30 s after the validator reported Ready"
   kubectl -n gpu-operator get pods -o wide
 }
 
