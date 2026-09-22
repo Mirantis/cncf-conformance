@@ -6,6 +6,16 @@ operator:
   defaultRuntime: containerd
 toolkit:
   env:
+    # Read the existing runtime config only from CONTAINERD_CONFIG. The default
+    # ("command", then "file") first runs `containerd config dump` on the host, which
+    # on images that ship their own containerd (the CAPI images k0rdent uses) returns
+    # that stock config with SystemdCgroup=true for runc; the toolkit would copy it
+    # into the nvidia runtimes and into k0s's containerd, while k0s's kubelet stays on
+    # cgroupfs, and every GPU pod fails with "expected cgroupsPath to be of format
+    # slice:prefix:name". Plain k0s hosts have no containerd on PATH, so the setting
+    # changes nothing there.
+    - name: RUNTIME_CONFIG_SOURCE
+      value: file
     - name: CONTAINERD_CONFIG
       value: /etc/k0s/containerd.d/nvidia.toml
     - name: CONTAINERD_SOCKET

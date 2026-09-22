@@ -1,0 +1,24 @@
+# SPDX-FileCopyrightText: 2026 Mirantis, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+# Azure child cluster, rendered by provision.sh with envsubst. The profile decides
+# the replica counts and VM sizes; the template decides the k0s version unless
+# K0S_VERSION overrides it. The rendered copy is kept in debug/.
+apiVersion: k0rdent.mirantis.com/v1beta1
+kind: ClusterDeployment
+metadata:
+  name: ${NAME}
+  namespace: kcm-system
+spec:
+  template: ${TEMPLATE}
+  credential: azure-cluster-identity-cred
+  config:
+    location: "${LOCATION}"
+    subscriptionID: "${AZURE_SUBSCRIPTION_ID}"
+    controlPlaneNumber: ${CONTROL_PLANE_NUMBER}
+    workersNumber: ${WORKERS_NUMBER}
+    controlPlane:
+      vmSize: ${CONTROL_PLANE_SIZE}
+    worker:
+      vmSize: ${WORKER_SIZE}
+    ${K0S_BLOCK}

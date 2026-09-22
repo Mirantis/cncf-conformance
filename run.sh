@@ -128,6 +128,7 @@ on_exit() {
   local rc=$1
   trap - EXIT
   set +e
+  stage_abort "$rc"
   log "cleanup (rc=$rc)"
   collect_cluster_state "$DEBUG/cluster-state" "$GPU_NODE"
   write_run_metadata

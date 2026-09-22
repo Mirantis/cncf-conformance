@@ -84,6 +84,7 @@ on_exit() {
   local rc=$1
   trap - EXIT
   set +e
+  stage_abort "$rc"
   collect_suite_state
   rm -rf "$WORK"
   exit "$rc"
@@ -172,7 +173,7 @@ write_suite_json() {
     nvidia-smi --query-gpu=driver_version,name --format=csv,noheader 2>/dev/null || echo 'unknown,unknown')
   tests='{}'
   if [ -f "$SUBMISSION/e2e.log" ]; then
-    tests=$(grep -E '^--- (PASS|FAIL|SKIP): Test[A-Za-z]+ ' "$SUBMISSION/e2e.log" |
+    tests=$({ grep -E '^--- (PASS|FAIL|SKIP): Test[A-Za-z]+ ' "$SUBMISSION/e2e.log" || true; } |
       awk '{sub(":", "", $2); print $3 "\t" $2}' | sort -u |
       jq -R -n '[inputs | split("\t") | {key: .[0], value: .[1]}] | from_entries')
   fi

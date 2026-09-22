@@ -37,16 +37,34 @@ require_tools() {
   [ -z "$missing" ] || die "missing tools:$missing" 2
 }
 
-# stage NAME COMMAND... — run COMMAND, record "NAME,seconds,rc" in $TIMINGS if set
+# stage NAME COMMAND... — run COMMAND, record "NAME,seconds,rc" in $TIMINGS if set.
+# COMMAND is not wrapped in "||" so that errexit stays active inside it: a failing
+# command aborts the script and the EXIT trap calls stage_abort to record the stage.
+# "stage NAME CMD || true" still works: errexit is off in that context and the
+# status of CMD is recorded and returned.
+STAGE_NAME=''
+STAGE_START=0
 stage() {
-  local name=$1 start rc=0
+  STAGE_NAME=$1
   shift
-  start=$(date +%s)
-  log "==> $name"
-  "$@" || rc=$?
-  [ -z "${TIMINGS:-}" ] || printf '%s,%s,%s\n' "$name" "$(($(date +%s) - start))" "$rc" >>"$TIMINGS"
-  [ $rc -eq 0 ] || log "!!! $name failed (rc=$rc)"
-  return $rc
+  STAGE_START=$(date +%s)
+  log "==> $STAGE_NAME"
+  "$@"
+  stage_done $?
+}
+
+# stage_done RC — record the current stage's timing and status; returns RC
+stage_done() {
+  local rc=$1
+  [ -z "${TIMINGS:-}" ] || printf '%s,%s,%s\n' "$STAGE_NAME" "$(($(date +%s) - STAGE_START))" "$rc" >>"$TIMINGS"
+  [ "$rc" -eq 0 ] || log "!!! $STAGE_NAME failed (rc=$rc)"
+  STAGE_NAME=''
+  return "$rc"
+}
+
+# stage_abort RC — for EXIT traps: record the stage that was running when the script aborted
+stage_abort() {
+  [ -z "$STAGE_NAME" ] || stage_done "${1:-1}" || true
 }
 
 # wait_for SECONDS COMMAND... — poll every 10 s until COMMAND succeeds
