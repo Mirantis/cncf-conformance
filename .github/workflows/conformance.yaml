@@ -49,6 +49,7 @@ jobs:
       suite-sha: ${{ steps.plan.outputs.suite-sha }}
       keep-cluster: ${{ steps.plan.outputs.keep-cluster }}
       timeout: ${{ steps.plan.outputs.timeout }}
+      attempts: ${{ steps.plan.outputs.attempts }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -76,7 +77,12 @@ jobs:
             echo "version=$VERSION"
             echo "suite-sha=${SUITE_SHA_INPUT:-$SUITE_SHA}"
             echo "keep-cluster=$KEEP"
-            echo "timeout=$([ "$SUITE" = k8s ] && echo 180 || echo 60)"
+            # Scheduled runs retry once so a transient infrastructure failure does not
+            # page anyone; dispatched runs do not, because their artifacts may be submitted.
+            attempts=$([ "$GITHUB_EVENT_NAME" = schedule ] && echo 2 || echo 1)
+            per_attempt=$([ "$SUITE" = k8s ] && echo 180 || echo 60)
+            echo "attempts=$attempts"
+            echo "timeout=$((per_attempt * attempts))"
           } >>"$GITHUB_OUTPUT"
           cat "$GITHUB_OUTPUT"
 
@@ -125,18 +131,27 @@ jobs:
           VERSION: ${{ needs.plan.outputs.version }}
           SUITE_SHA: ${{ needs.plan.outputs.suite-sha }}
           KEEP_CLUSTER: ${{ needs.plan.outputs.keep-cluster }}
+          ATTEMPTS: ${{ needs.plan.outputs.attempts }}
         run: |
           keep=''
           [ "$KEEP_CLUSTER" != y ] || keep=--keep-cluster
-          # shellcheck disable=SC2086
-          ./run.sh --product "$PRODUCT" --suite "$SUITE" --version "$VERSION" \
-            --suite-sha "$SUITE_SHA" --run-id "$RUN_ID" --out "$ARTIFACTS" $keep 2>&1 | tee run.log
-          rc="${PIPESTATUS[0]}"
-          {
-            echo '```'
-            tail -n 8 run.log
-            echo '```'
-          } >>"$GITHUB_STEP_SUMMARY"
+          rc=1
+          for attempt in $(seq 1 "$ATTEMPTS"); do
+            run_id="$RUN_ID"
+            [ "$attempt" -eq 1 ] || run_id="$RUN_ID-r$attempt"
+            # shellcheck disable=SC2086
+            ./run.sh --product "$PRODUCT" --suite "$SUITE" --version "$VERSION" \
+              --suite-sha "$SUITE_SHA" --run-id "$run_id" --out "$ARTIFACTS" $keep 2>&1 | tee "run-$attempt.log"
+            rc="${PIPESTATUS[0]}"
+            {
+              echo "### attempt $attempt of $ATTEMPTS: exit $rc"
+              echo '```'
+              tail -n 8 "run-$attempt.log"
+              echo '```'
+            } >>"$GITHUB_STEP_SUMMARY"
+            [ "$rc" -ne 0 ] || break
+            [ "$attempt" -eq "$ATTEMPTS" ] || echo "::warning::attempt $attempt failed with exit $rc; retrying"
+          done
           exit "$rc"
 
       - name: Upload artifacts
@@ -154,4 +169,11 @@ jobs:
       - name: Destroy leftovers
         # Safety net in case the runner killed run.sh before its own cleanup.
         if: always() && needs.plan.outputs.keep-cluster != 'y'
-        run: provision/${{ matrix.product }}/provision.sh down --run-id "$RUN_ID"
+        env:
+          ATTEMPTS: ${{ needs.plan.outputs.attempts }}
+        run: |
+          for attempt in $(seq 1 "$ATTEMPTS"); do
+            run_id="$RUN_ID"
+            [ "$attempt" -eq 1 ] || run_id="$RUN_ID-r$attempt"
+            provision/${{ matrix.product }}/provision.sh down --run-id "$run_id"
+          done
