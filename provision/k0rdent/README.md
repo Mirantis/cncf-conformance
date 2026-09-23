@@ -8,7 +8,7 @@ An ephemeral [kind](https://kind.sigs.k8s.io) management cluster running [k0rden
 | `up` | kind cluster → `helm install kcm` with `controller.createManagement=false` → `Management` with only the k0smotron, Azure and Sveltos providers (the default enables every provider, too much for a kind cluster on a runner) → wait for it and for the `azure-standalone-cp` `ClusterTemplate` → Azure `Secret`, `AzureClusterIdentity`, `Credential` and the `azure-cluster-identity-resource-template` ConfigMap → `ClusterDeployment` → wait `Ready` → child kubeconfig → wait for every node Ready and initialised by the cloud controller manager |
 | `down` | delete the `ClusterDeployment` and wait for its resource group to go, fall back to `az group delete`, delete the kind cluster |
 
-Everything is named `conformance-k0rdent-<run-id>`: the kind cluster, the `ClusterDeployment` and, because CAPZ names the resource group after the cluster, the Azure resource group.
+Everything is named `conformance-k0rdent-<run-id>`: the kind cluster, the `ClusterDeployment` and, because CAPZ names the resource group after the cluster, the Azure resource group. The name must stay within 36 characters: CAPZ names the worker availability set `<name>_<name>-md-as` and Azure caps that at 80.
 
 ## Versions
 

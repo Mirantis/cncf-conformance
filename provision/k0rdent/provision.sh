@@ -354,6 +354,8 @@ write_outputs() {
 
 cmd_up() {
   [ -n "$RUN_ID" ] || die '--run-id is required' 2
+  # CAPZ names the worker availability set <name>_<name>-md-as and Azure caps it at 80.
+  [ "${#NAME}" -le 36 ] || die "name $NAME is ${#NAME} chars; the Azure availability set name needs <= 36" 2
   [ -n "$OUT" ] || die '--out is required' 2
   require_tools az kind helm kubectl jq curl git envsubst
   az account show --query id -o tsv >/dev/null || die 'az is not logged in' 2
