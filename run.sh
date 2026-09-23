@@ -93,8 +93,11 @@ INFRA=''
 
 print_summary() {
   echo
-  echo "$PRODUCT ${PRODUCT_VERSION:-$VERSION} · $SUITE · suite ${SUITE_SHA:0:7} · ${INFRA:-no cluster}"
+  local ref="suite ${SUITE_SHA:0:7}"
+  [ "$SUITE" != k8s ] || ref="sonobuoy $SONOBUOY_VERSION"
+  echo "$PRODUCT ${PRODUCT_VERSION:-$VERSION} · $SUITE · $ref · ${INFRA:-no cluster}"
   if [ -f "$DEBUG/suite.json" ]; then
+    jq -r '.results // empty | "result: \(.status) · \(.passed) passed · \(.failed) failed · \(.skipped) skipped of \(.total)"' "$DEBUG/suite.json"
     jq -r '.tests | to_entries[] | "\(.key)\t\(.value)"' "$DEBUG/suite.json" | awk -F'\t' '{printf "%-36s %s\n", $1, $2}'
   else
     echo "suite did not run"
