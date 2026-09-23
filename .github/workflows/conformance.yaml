@@ -97,7 +97,7 @@ jobs:
       matrix:
         product: ${{ fromJSON(needs.plan.outputs.matrix) }}
     env:
-      RUN_ID: gha-${{ github.run_id }}-${{ matrix.product }}
+      RUN_ID: ${{ github.run_id }} # provisioners add the product; k0rdent names cap its length
       ARTIFACTS: ${{ github.workspace }}/artifacts
 
     steps:

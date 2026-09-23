@@ -24,7 +24,7 @@ Usage: $0 --product PRODUCT --suite SUITE [OPTIONS]
   --suite-sha SHA                     override SUITE_SHA from versions.env (ai)
   --out DIR                           artifact root; a UTC-timestamped subdirectory is
                                       created (default: ./artifacts)
-  --run-id ID                         resource naming suffix (default: gha-\$GITHUB_RUN_ID
+  --run-id ID                         resource naming suffix (default: \$GITHUB_RUN_ID
                                       or the current epoch)
   --location LOCATION                 passed to the provisioner
   --keep-cluster                      do not run 'down'; keep kubeconfig and ssh material
@@ -41,8 +41,7 @@ VERSION=main
 PROFILE=''
 SUITE_SHA_OVERRIDE=''
 OUT_ROOT=./artifacts
-RUN_ID="${GITHUB_RUN_ID:+gha-$GITHUB_RUN_ID}"
-RUN_ID="${RUN_ID:-$(date +%s)}"
+RUN_ID="${GITHUB_RUN_ID:-$(date +%s)}"
 LOCATION=''
 KEEP_CLUSTER=n
 
