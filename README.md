@@ -28,9 +28,9 @@ Each certified entry links to the upstream directory and, for pipeline runs, to 
 
 | Product | Program | v1.35 | v1.36 | v1.37 |
 |---|---|---|---|---|
-| k0s | AI Conformance | [certified](https://github.com/cncf/k8s-ai-conformance/tree/main/v1.35/k0s) (manual) | pipeline green ([run](https://github.com/Mirantis/cncf-conformance/actions/runs/35737735835)), submission pending | planned |
-| k0rdent | AI Conformance | [certified](https://github.com/cncf/k8s-ai-conformance/tree/main/v1.35/k0rdent) (manual) | pipeline green locally, submission pending | planned |
-| k0rdent | Kubernetes Conformance | [certified](https://github.com/cncf/k8s-conformance/tree/master/v1.35/k0rdent) (manual) | planned | planned |
+| k0s | AI Conformance | [certified](https://github.com/cncf/k8s-ai-conformance/tree/main/v1.35/k0s) (manual) | [certified](https://github.com/cncf/k8s-ai-conformance/tree/main/v1.36/k0s) ([run](https://github.com/Mirantis/cncf-conformance/actions/runs/35737735835)) | planned |
+| k0rdent | AI Conformance | [certified](https://github.com/cncf/k8s-ai-conformance/tree/main/v1.35/k0rdent) (manual) | pipeline green ([run](https://github.com/Mirantis/cncf-conformance/actions/runs/35820041560)), submission waits for Kubernetes Conformance | planned |
+| k0rdent | Kubernetes Conformance | [certified](https://github.com/cncf/k8s-conformance/tree/master/v1.35/k0rdent) (manual) | pipeline green ([run](https://github.com/Mirantis/cncf-conformance/actions/runs/35824666215)), submission pending | planned |
 
 ## License
 

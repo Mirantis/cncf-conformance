@@ -81,7 +81,9 @@ jobs:
             attempts=$([ "$GITHUB_EVENT_NAME" = schedule ] && echo 2 || echo 1)
             # Minutes per attempt and product. k0s ai ≈ 15 min, k0rdent ai ≈ 36 min
             # (kind + kcm 5, ClusterDeployment 10, GPU Operator 7, suite 3, teardown 8).
-            if [ "$SUITE" = k8s ]; then k0s=180; k0rdent=180; else k0s=60; k0rdent=75; fi
+            # k0rdent k8s ≈ 156 min (provisioning 22, Sonobuoy 129, teardown 5); the
+            # budget covers provisioning + SONOBUOY_WAIT (180) + teardown.
+            if [ "$SUITE" = k8s ]; then k0s=180; k0rdent=240; else k0s=60; k0rdent=75; fi
             echo "attempts=$attempts"
             echo "timeouts={\"k0s\":$((k0s * attempts)),\"k0rdent\":$((k0rdent * attempts))}"
           } >>"$GITHUB_OUTPUT"
@@ -178,6 +180,11 @@ jobs:
         # Safety net in case the runner killed run.sh before its own cleanup.
         if: always() && needs.plan.outputs.keep-cluster != 'y'
         env:
+          # For a fresh az login once the OIDC one has expired (k0rdent k8s runs).
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
           ATTEMPTS: ${{ needs.plan.outputs.attempts }}
         run: |
           for attempt in $(seq 1 "$ATTEMPTS"); do

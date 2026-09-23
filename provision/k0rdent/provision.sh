@@ -379,11 +379,28 @@ cmd_up() {
 
 # ---------- down ----------
 
-rg_gone() { [ "$(az group exists -n "$NAME")" != true ]; }
+# A failed az call must not read as "gone".
+rg_gone() {
+  local exists
+  exists=$(az group exists -n "$NAME") || return 1
+  [ "$exists" != true ]
+}
+
+# The OIDC login from azure/login cannot be refreshed once the GitHub token behind
+# it expires (about an hour), which a k8s run outlasts. In Actions, log in again
+# with the service principal secret the run already has.
+ensure_az_session() {
+  az group list --query '[0].name' -o none 2>/dev/null && return 0
+  [ "${GITHUB_ACTIONS:-}" = true ] && [ -n "${AZURE_CLIENT_SECRET:-}" ] || die 'az session expired; log in again' 2
+  log 'az session expired; logging in with the service principal'
+  az login --service-principal -u "$AZURE_CLIENT_ID" -p "$AZURE_CLIENT_SECRET" --tenant "$AZURE_TENANT_ID" -o none
+  [ -z "${AZURE_SUBSCRIPTION_ID:-}" ] || az account set -s "$AZURE_SUBSCRIPTION_ID"
+}
 
 cmd_down() {
   [ -n "$RUN_ID" ] || die '--run-id is required' 2
   require_tools az kind kubectl
+  ensure_az_session
   WORK=$(mktemp -d)
   trap 'rm -rf "$WORK"' EXIT
   if kind get clusters 2>/dev/null | grep -qx "$NAME"; then
